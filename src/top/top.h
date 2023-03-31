@@ -402,6 +402,40 @@ typedef struct RCF_t {
            By expending a little effort in its creation and user requested
            maintenance, the only real additional per frame cost of having
            windows is an extra sort -- but that's just on pointers! */
+/*
+        pflgsall [PFLAGSSIZ]: 枚举类型数组，包含所有进程状态的标志位信息。
+        procflgs [PFLAGSSIZ]: 枚举类型数组，是pflgsall的子集，表示当前需要显示的进程状态标志位信息。
+        rc: RCW_t类型，包含top的配置信息，会被写入配置文件中。
+        winnum: 窗口号，即该窗口在窗口栈中的位置，从1开始计数。
+        winlines: 窗口当前的行数。
+        maxpflgs: 当前窗口中需要显示的进程状态标志位数量。
+        totpflgs: 所有进程状态标志位的数量。
+        begpflg: 可滚动的 pflgsall 数组的起始位置。
+        endpflg: 可滚动的 pflgsall 数组的结束位置。
+        begtask: 可滚动的所有任务的起始位置。
+        begnext: 下一帧的 begtask 滚动增量。
+        varcolbeg: 可滚动的可变宽度列内部的位置。
+        varcolsz: 可变宽度列的最大长度。
+        usrseluid: 'u/U' 用户选择的验证 uid。
+        usrseltyp: 上面的 uid 匹配的依据。
+        usrselflg: 指示是否包含/排除匹配项的标志。
+        hdrcaplen: 如果有的话，列头额外的标签长度。
+        capclr_sum、capclr_msg、capclr_pmt、capclr_hdr、capclr_rowhigh、capclr_rownorm：从 RCW_t 颜色构建的 terminfo 字符串。
+        cap_bold：用于支持 View_NOBOLD 切换。
+        grpname：窗口编号和名称，可打印。
+        columnhdr：用于 procflgs 的列标题。
+        captab：show_special() 所需的 captab。
+        osel_1st：其他选择条件的锚点。
+        osel_tot：其他选择条件的总数。
+        findstr：窗口的当前/活动搜索字符串。
+        findlen：上述字符串的 strlen，无需调用开销。
+        focus_pid：当 'F' 切换处于活动状态时的目标 pid。
+        focus_beg：'F' 切换开始的 ppt 索引。
+        focus_end：'F' 切换结束的 ppt 索引。
+        ppt：该窗口的 ppt 堆栈指针数组。
+        next：窗口堆栈中的下一个窗口。
+        prev：窗口堆栈中的前一个窗口。
+*/
 typedef struct WIN_t {
    FLG_t  pflgsall [PFLAGSSIZ],        // all 'active/on' fieldscur, as enum
           procflgs [PFLAGSSIZ];        // fieldscur subset, as enum

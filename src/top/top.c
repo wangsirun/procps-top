@@ -1013,12 +1013,15 @@ static void show_special (int interact, const char *glob) {
      ( However, such an approach was abandoned. As a result )
      ( this function is called only with a glob under top's )
      ( control and never containing any 'raw/binary' chars! ) */
+   // 512 字节
    char tmp[LRGBUFSIZ], lin[LRGBUFSIZ], row[ROWMINSIZ];
    char *rp, *lin_end, *sub_beg, *sub_end;
    int room;
 
    // handle multiple lines passed in a bunch
+   // 处理一堆传递的多行
    while ((lin_end = strchr(glob, '\n'))) {
+      // 一行为一个处理单元unit
     #define myMIN(a,b) (((a) < (b)) ? (a) : (b))
       size_t lessor = myMIN((size_t)(lin_end - glob), sizeof(lin) -3);
 
@@ -6847,7 +6850,7 @@ static void summary_show (void) {
          , Pids_reap->counts->sleeping + Pids_reap->counts->other
          , Pids_reap->counts->stopped, Pids_reap->counts->zombied));
       Msg_row += 1;
-
+      // 紧接着显示cpu的信息
       do_cpus();
    }
 
@@ -7366,7 +7369,7 @@ static void frame_make (void) {
    summary_show();
    Max_lines = (SCREEN_ROWS - Msg_row) - 1;
 
-   // we're now on Msg_row so clear out any residual messages ...
+   // we're now on Msg_row so clear out any residual(残存) messages ...
    putp(Cap_clr_eol);
 
    if (!Rc.mode_altscr) {
