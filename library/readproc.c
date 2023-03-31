@@ -562,6 +562,65 @@ static int sd2proc (proc_t *restrict p) {
 
 // Reads /proc/*/stat files, being careful not to trip over processes with
 // names like ":-) 1 2 3 4 5 6".
+// /proc/pid/stat各个数值的含义
+/*
+pid：进程 ID。
+comm：进程名称，不超过 16 个字符。
+state：进程状态，其中包含以下值：
+    R：运行中（running）。
+    S：睡眠中（sleeping）。
+    D：不可中断的睡眠状态（uninterruptible sleep）。
+    T：跟踪/停止状态（tracing/stop）。
+    Z：僵尸进程（zombie）。
+    W：被交换出内存（swapped out）。
+ppid：父进程 ID。
+pgrp：进程组 ID。
+session：会话 ID。
+tty_nr：进程所在的终端的 tty 设备号。
+tpgid：进程所在的进程组的进程组 ID。
+flags：进程的标志位，包括以下值：
+    1：进程正在运行。
+    2：进程使用了跟踪/停止功能。
+    4：进程被置于了调度策略的实时优先级队列中。
+    8：进程被置于了调度策略的实时循环时间队列中。
+    16：进程是一个会话的领头进程。
+    32：进程是一个进程组的领头进程。
+    64：进程已经被挂起。
+    128：进程正在执行一个 fork 操作。
+    256：进程已经进入了僵尸状态。
+minflt：进程的次缺页错误数，即进程试图访问的虚拟内存地址不在物理内存中的次数。
+cminflt：进程的子进程的次缺页错误数。
+majflt：进程的主缺页错误数，即进程试图访问的虚拟内存地址不在物理内存中，并且需要进行磁盘 I/O 的次数。
+cmajflt：进程的子进程的主缺页错误数。
+utime：进程在用户态（user mode）中执行的 CPU 时间，单位为 clock ticks。
+stime：进程在内核态（system mode）中执行的 CPU 时间，单位为 clock ticks。
+cutime：进程及其子进程在用户态中执行的 CPU 时间总和，单位为 clock ticks。
+cstime：进程及其子进程在内核态中执行的 CPU 时间总和，单位为 clock ticks。
+priority：进程的动态优先级。
+nice：进程的静态优先级。
+num_threads：进程中的线程数。
+itrealvalue：进程中用于计算实际运行时间的值。
+starttime：进程启动时间，以 clock ticks 为单位。
+vsize：进程的虚拟内存大小，单位为字节。
+rss：进程占用的物理内存大小，单位为内存页数。
+rsslim：进程占用物理内存的限制大小，单位为字节。
+startcode：可执行代码段的起始地址。
+endcode：可执行代码段的结束地址。
+startstack：栈的起始地址。
+kstkesp：当前栈指针（ESP）的值。
+kstkeip：当前指令指针（EIP）的值。
+signal：进程挂起的信号的位图。
+blocked：进程阻塞的信号的位图。
+sigignore：进程忽略的信号的位图。
+sigcatch：进程捕获的信号的位图。
+wchan：进程正在等待的内核函数的地址。
+nswap：进程使用的交换空间大小，单位为内存页数。
+cnswap：进程及其子进程使用的交换空间大小总和，单位为内存页数。
+exit_signal：进程退出时发送的信号。
+processor：进程在哪个 CPU 上执行。
+rt_priority：进程的实时优先级。
+policy：进程的调度策略。
+*/ 
 static int stat2proc (const char *S, proc_t *restrict P) {
     char buf[64], raw[64];
     size_t num;
@@ -570,15 +629,20 @@ static int stat2proc (const char *S, proc_t *restrict P) {
 ENTER(0x160);
 
     /* fill in default values for older kernels */
+    // 进程在那个cpu上运行
     P->processor = 0;
+    // 进程的实时优先级
     P->rtprio = -1;
+    // 进程的调度?? 
     P->sched = -1;
+    // 进程中的线程数 
     P->nlwp = 0;
 
     S = strchr(S, '(');
     if (!S) return 0;
     S++;
     tmp = strrchr(S, ')');
+    // 返回)之后的字符
     if (!tmp || !tmp[1]) return 0;
 #ifdef FALSE_THREADS
     if (!IS_THREAD(P)) {
@@ -586,8 +650,11 @@ ENTER(0x160);
     if (!P->cmd) {
        num = tmp - S;
        memcpy(raw, S, num);
+       // raw -> 本次进程的命令
        raw[num] = '\0';
+       // 将raw写进buf中
        escape_str(buf, raw, sizeof(buf));
+       // p->cmd = raw
        if (!(P->cmd = strdup(buf))) return 1;
     }
 #ifdef FALSE_THREADS
@@ -624,6 +691,7 @@ ENTER(0x160);
        &P->rss,
        &P->rss_rlim, &P->start_code, &P->end_code, &P->start_stack, &P->kstk_esp, &P->kstk_eip,
 /*     P->signal, P->blocked, P->sigignore, P->sigcatch,   */ /* can't use */
+       // 进程正在等待的内核函数的地址。
        &P->wchan, /* &P->nswap, &P->cnswap, */  /* nswap and cnswap dead for 2.4.xx and up */
 /* -- Linux 2.0.35 ends here -- */
        &P->exit_signal, &P->processor,  /* 2.2.1 ends with "exit_signal" */
@@ -632,6 +700,7 @@ ENTER(0x160);
        &P->blkio_tics, &P->gtime, &P->cgtime
     );
 
+    // 子线程的数量
     if(!P->nlwp)
       P->nlwp = 1;
 
@@ -719,20 +788,24 @@ static void smaps2proc (const char *s, proc_t *restrict P) {
   #undef mkOBJ
 }
 
+// 返回指定文件的大小
 static int file2str(const char *directory, const char *what, struct utlbuf_s *ub) {
  #define buffGRW 1024
+    // 64
     char path[PROCPATHLEN];
     int fd, num, tot_read = 0, len;
 
-    /* on first use we preallocate a buffer of minimum size to emulate
+    /* on first use we preallocate(预分配) a buffer of minimum size to emulate
        former 'local static' behavior -- even if this read fails, that
        buffer will likely soon be used for another subdirectory anyway
        ( besides, with the calloc call we will never need use memcpy ) */
     if (ub->buf) ub->buf[0] = '\0';
     else {
+        // here
         ub->buf = calloc(1, (ub->siz = buffGRW));
         if (!ub->buf) return -1;
     }
+    // /proc/self/stat/
     len = snprintf(path, sizeof path, "%s/%s", directory, what);
     if (len <= 0 || (size_t)len >= sizeof path) return -1;
     if (-1 == (fd = open(path, O_RDONLY, 0))) return -1;
@@ -1120,6 +1193,7 @@ static void autogroup_fill (const char *path, proc_t *p) {
 // This reads process info from /proc in the traditional way, for one process.
 // The pid (tgid? tid?) is already in p, and a path to it in path, with some
 // room to spare.
+// /proc/pid/*
 static proc_t *simple_readproc(PROCTAB *restrict const PT, proc_t *restrict const p) {
     static __thread struct utlbuf_s ub = { NULL, 0 };    // buf for stat,statm,status
     static __thread struct stat sb;     // stat() buffer
@@ -1131,6 +1205,7 @@ static proc_t *simple_readproc(PROCTAB *restrict const PT, proc_t *restrict cons
         goto next_proc;
 
     if ((flags & PROC_UID) && !XinLN(uid_t, sb.st_uid, PT->uids, PT->nuid))
+        // continue
         goto next_proc;                      /* not one of the requested uids */
 
     p->euid = sb.st_uid;                        /* need a way to get real uid */
@@ -1250,6 +1325,7 @@ next_proc:
 // This reads /proc/*/task/* data, for one task.
 // t is the POSIX thread  (task group member, generally not the leader)
 // path is a path to the task, with some room to spare.
+// read /proc/pid/task/tid/*
 static proc_t *simple_readtask(PROCTAB *restrict const PT, proc_t *restrict const t, char *restrict const path) {
     static __thread struct utlbuf_s ub = { NULL, 0 };    // buf for stat,statm,status
     static __thread struct stat sb;     // stat() buffer
@@ -1394,21 +1470,30 @@ static int simple_nextpid(PROCTAB *restrict const PT, proc_t *restrict const p) 
 //////////////////////////////////////////////////////////////////////////////////
 // This finds tasks in /proc/*/task/ in the traditional way.
 // Return non-zero on success.
+// 获取下一个task目录下的线程的path
 static int simple_nexttid(PROCTAB *restrict const PT, const proc_t *restrict const p, proc_t *restrict const t, char *restrict const path) {
   static __thread struct dirent *ent;   /* dirent handle */
   if(PT->taskdir_user != p->tgid){
     if(PT->taskdir){
+      // 空的话就关闭文件句柄
       closedir(PT->taskdir);
     }
     // use "path" as some tmp space
+    // /proc/pid/task目录包含了与指定进程相关联的所有线程的信息，
+    // 通过这个目录可以访问进程的每个线程的状态和属性。例如，
+    //可以查看线程的CPU占用率、内存使用情况、栈大小等等。
     snprintf(path, PROCPATHLEN, "/proc/%d/task", p->tgid);
     PT->taskdir = opendir(path);
     if(!PT->taskdir) return 0;
+    // tgid就是线程所属的进程的pid
     PT->taskdir_user = p->tgid;
   }
   for (;;) {
+    // readdir 就是一个getnext yield
     ent = readdir(PT->taskdir);
+    // break
     if(!ent || !ent->d_name[0]) return 0;
+    // 只要读取一个就停止
     if(*ent->d_name > '0' && *ent->d_name <= '9') break;
   }
   t->tid = strtoul(ent->d_name, NULL, 10);
@@ -1532,13 +1617,27 @@ end_procs:
 PROCTAB *openproc(unsigned flags, ...) {
     va_list ap;
     struct stat sbuf;
+    /*
+        在C语言中，static关键字用于指定一个全局变量或函数仅在当前文件内可见。
+        而__thread是GCC编译器提供的线程局部存储方式，它用于定义线程局部变量，
+        即每个线程拥有自己独立的变量副本，互不干扰。
+        将static和__thread组合使用，
+        则可以定义一个只在当前文件内可见且每个线程拥有自己独立的变量副本的线程局部静态变量。
+        这样的变量可以被多个线程共享所调用的函数，而不会相互干扰。
+    */
     static __thread int did_stat;
     static __thread int hide_kernel = -1;
+    // 我的理解就是 /proc/*所有的进程的信息集合table
     PROCTAB *PT = calloc(1, sizeof(PROCTAB));
 
     if (!PT)
+        // calloc 失败
         return NULL;
     if (hide_kernel < 0)
+        // LIBPROC_HIDE_KERNEL是一个Linux环境变量，用于隐藏内核线程和进程的信息。
+        // 当该环境变量被设置为1时，/proc文件系统中的进程和内核线程列表将不会包含隐藏的进程和线程。
+        // 这个环境变量通常被用于提高安全性，防止恶意软件获取关键信息。但值得注意的是，它可能会影响一些系统工具的正常运行，
+        // 所以在使用之前需要进行谨慎评估
         hide_kernel = (NULL != getenv("LIBPROC_HIDE_KERNEL"));
     if (!did_stat){
         task_dir_missing = stat("/proc/self/task", &sbuf);
@@ -1612,13 +1711,16 @@ int look_up_our_self(void) {
     proc_t p;
 
     memset(&p, 0, sizeof(proc_t));
+    // 返回指定文件的读取大小和将文件内容输出到ub.buf中
     if(file2str("/proc/self", "stat", &ub) == -1){
         fprintf(stderr, "Error, do this: mount -t proc proc /proc\n");
         _exit(47);
     }
+    // 将/proc/self/stat中进程的信息写入到proc_t中
     rc = stat2proc(ub.buf, &p); // parse /proc/self/stat
     free_acquired(&p);
     free(ub.buf);
+    // return 1 success
     return !rc;
 }
 

@@ -127,6 +127,7 @@ struct stacks_extent {
 };
 
 struct meminfo_info {
+    // refcount == 1 the destored
     int refcount;
     int meminfo_fd;
     struct mem_hist hist;

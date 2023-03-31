@@ -26,6 +26,7 @@
 extern "C" {
 #endif
 
+// 进程信息的类型 
 enum pids_item {
     PIDS_noop,              //        ( never altered )
     PIDS_extra,             //        ( reset to zero )
@@ -195,10 +196,15 @@ enum pids_fetch_type {
     PIDS_FETCH_THREADS_TOO
 };
 
+// 可以指定是什么类型 demo: enum fruit : unsigned char { APPLE, BANANA, ORANGE };// 显式指定类型为unsigned char
 enum pids_select_type {
+    // 00000000 00000001 00000000 00000000
     PIDS_SELECT_PID         = 0x10000,
+    // 00000000 00000001 00000000 00000001 
     PIDS_SELECT_PID_THREADS = 0x10001,
+    // 00000000 00000010 00000000 00000000
     PIDS_SELECT_UID         = 0x20000,
+    // 00000000 00000010 00000000 00000001  
     PIDS_SELECT_UID_THREADS = 0x20001
 };
 
@@ -232,7 +238,9 @@ struct pids_counts {
 };
 
 struct pids_fetch {
+    // 统计pid的信息，例如总过多少个，都什么状态  
     struct pids_counts *counts;
+    // 各个进程统计的信息array
     struct pids_stack **stacks;
 };
 

@@ -764,6 +764,7 @@ static void build_uniq_nlstab (void) {
 /* Translation Hint:
    .  The next 5 items must each be translated as a single line.
    . */
+   // nls国际化支持，就是字体的本地化设置
    Uniq_nlstab[STATE_line_1_fmt] = _("%s:~3"
       " %3u ~2total,~3 %3u ~2running,~3 %3u ~2sleeping,~3 %3u ~2stopped,~3 %3u ~2zombie~3\n");
 

@@ -97,9 +97,11 @@ int escape_str (char *dst, const char *src, int bufsize) {
    int n;
 
    if (utf_sw == 0) {
+      // 翻译相关？
       char *enc = nl_langinfo(CODESET);
       utf_sw = enc && strcasecmp(enc, "UTF-8") == 0 ? 1 : -1;
    }
+   // 全部设置为 '\0'
    SECURE_ESCAPE_ARGS(dst, bufsize);
    n = snprintf(dst, bufsize, "%s", src);
    if (n < 0) {

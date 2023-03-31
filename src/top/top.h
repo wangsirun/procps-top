@@ -320,6 +320,22 @@ enum warn_enum {
 };
 
         /* This type helps support both a window AND the rcfile */
+        /*
+        sortindx: 表示排序字段（表示为procflag），类型为int。
+        winflags: 表示视图、显示和排序模式的标志，类型为int。
+        maxtasks: 表示用户请求的最大任务数，0表示全部，类型为int。
+        graph_cpus: 表示是否显示补充的CPU值，类型为int。
+        graph_mems: 表示是否显示补充的内存值，类型为int。
+        double_up: 表示是否在同一行上显示多个CPU，类型为int。
+        combine_cpus: 表示是否将附加的CPU组合起来，类型为int。
+        core_types: 表示是否显示/过滤P-core / E-core CPU，类型为int。
+        summclr: 表示summ信息使用的颜色编号，类型为int。
+        msgsclr: 表示msgs/pmts中使用的颜色编号，类型为int。
+        headclr: 表示列标题中使用的颜色编号，类型为int。
+        taskclr: 表示任务行中使用的颜色编号，类型为int。
+        winname: 表示窗口名称，用户可更改，类型为char数组。
+        fieldscur: 表示显示字段及其顺序的FLG_t结构体数组，类型为FLG_t [PFLAGSSIZ]。
+        */
 typedef struct RCW_t {  // the 'window' portion of an rcfile
    int    sortindx,               // sort field (represented as procflag)
           winflags,               // 'view', 'show' and 'sort' mode flags
@@ -338,13 +354,43 @@ typedef struct RCW_t {  // the 'window' portion of an rcfile
 } RCW_t;
 
         /* This represents the complete rcfile */
+/*
+        rcfile一般指的是“运行控制文件”（run control file），也叫“启动脚本”（
+        startup script），是一种文本文件，用于配置、定制计算机系统或应用程序的启动和运行行为。
+        在Unix或Linux操作系统中，rcfile通常被放置在用户主目录下的隐藏文件夹中，
+        以“.rc”或“.profile”等后缀命名。例如，Shell的启动脚本就是.bashrc或.bash_profile。
+        id: 表示rcfile版本的标识符，类型为char。
+        mode_altscr: 表示是否启用Alt显示模式，类型为int。
+        mode_irixps: 表示在SMP系统中使用Irix vs. Solaris模式，类型为int。
+        delay_time: 表示更新间隔时间，类型为float。
+        win_index: 表示当前窗口的索引，类型为int。
+        win: 包含GROUPSMAX个WIN_t结构体，表示每个窗口的RC文件。
+        fixed_widest: 表示是否启用更宽的非可扩展列添加，类型为int。
+        summ_mscale: 表示汇总内存值的缩放比例，类型为int。
+        task_mscale: 表示进程内存值的缩放比例，类型为int。
+        zero_suppress: 表示是否启用缩放后的零值抑制，类型为int。
+        tics_scaled: 表示是否启用时间和/或时间+列的缩放，类型为int。
+
+        SMP（Symmetric Multiprocessing）系统是一种多处理器系统，其中所有的处理器都平等地共享同一块主存储器和相应的I/O设备。每个处理器都可以执行任何可用进程的代码，而不是只能从特定的内存或I/O设备中读取或写入数据。
+        SMP系统可以显著提高计算机性能，因为它允许多个处理器同时执行任务。这种类型的系统通常用于高性能计算、数据库服务器、Web服务器和其他需要大量计算能力的应用程序。
+        SMP系统有很多优点，包括：
+        提高了计算机的处理速度和吞吐量。
+        允许多个用户同时访问系统，从而使系统资源得到更好的利用。
+        提高了系统的可靠性和可用性，因为如果一个处理器失败，其他处理器可以继续工作。
+        简化了系统管理和配置，因为系统管理员只需要维护一个操作系统和一组驱动程序。
+        尽管SMP系统具有很多优点，但也存在缺点。其中最明显的是成本和功耗。由于需要多个处理器和相应的硬件，SMP系统的成本通常比单处理器系统更高，并且需要更多的电力和散热能力。此外，程序员必须确保他们的代码可以并行执行，否则SMP系统可能无法充分利用所有处理器的能力。
+
+        SMP（Symmetric Multiprocessing，对称多处理）是指在一个计算机系统中使用多个CPU来完成任务的技术。Irix和Solaris是两种常见的操作系统，在SMP环境下它们都有特定的运行模式：
+        Irix模式：Irix是SGI公司开发的一种UNIX操作系统，其SMP运行模式被称为Irix mode。在这种模式下，所有可用的CPU被视为平等的，并且内核会自动分配任务到不同的CPU上执行。如果一个CPU出现故障或者需要维护，系统可以自动将任务分配给其他可用的CPU，以保证系统的稳定性和可靠性。
+        Solaris模式：Solaris是Sun Microsystems开发的一种UNIX操作系统，其SMP运行模式被称为Solaris mode。在这种模式下，系统会将多个CPU划分成逻辑组（logical group），每个逻辑组包含了一组相邻的CPU。当一个进程需要执行时，系统会将其放入某个逻辑组中，由该组中的某个CPU执行，以减少CPU之间的竞争，提高系统的性能和响应速度。同时，系统还支持动态调整逻辑组大小和重新划分逻辑组，以适应不同的系统负载和硬件配置。
+*/
 typedef struct RCF_t {
-   char   id;                   // rcfile version id
+   char   id;                   // rcfile version id 版本
    int    mode_altscr;          // 'A' - Alt display mode (multi task windows)
-   int    mode_irixps;          // 'I' - Irix vs. Solaris mode (SMP-only)
-   float  delay_time;           // 'd'/'s' - How long to sleep twixt updates
+   int    mode_irixps;          // 'I' - Irix vs. Solaris mode (SMP-only)两种操作系统的模式，具体见上
+   float  delay_time;           // 'd'/'s' - How long to sleep twixt updates 更新间隔时间
    int    win_index;            // Curwin, as index
-   RCW_t  win [GROUPSMAX];      // a 'WIN_t.rc' for each window
+   RCW_t  win [GROUPSMAX];      // a 'WIN_t.rc' for each window 每一个window
    int    fixed_widest;         // 'X' - wider non-scalable col addition
    int    summ_mscale;          // 'E' - scaling of summary memory values
    int    task_mscale;          // 'e' - scaling of process memory values
@@ -542,14 +588,14 @@ typedef struct WIN_t {
         /* The default fields displayed and their order,
            if nothing is specified by the loser, oops user. */
 #ifdef ORIG_TOPDEFS
-#define DEF_FORMER  "�������ķ���&')*+,-./012568<>?ABCFGHIJKLMNOPQRSTUVWXYZ[" RCF_PLUS_H RCF_PLUS_J
+#define DEF_FORMER  "�������ķ���&')*+,-./012568<>?ABCFGHIJKLMNOPQRSTUVWXYZ[" RCF_PLUS_H RCF_PLUS_J
 #else
-#define DEF_FORMER  "�&K�����@���56�F�')*+,-./0128<>?ABCGHIJLMNOPQRSTUVWXYZ[" RCF_PLUS_H RCF_PLUS_J
+#define DEF_FORMER  "�&K�����@���56�F�')*+,-./0128<>?ABCGHIJLMNOPQRSTUVWXYZ[" RCF_PLUS_H RCF_PLUS_J
 #endif
         /* Pre-configured windows/field groups */
-#define JOB_FORMER  "�����(��Ļ�@<��)*+,-./012568>?ABCFGHIJKLMNOPQRSTUVWXYZ[" RCF_PLUS_H RCF_PLUS_J
-#define MEM_FORMER  "���<�����MBN�D34��&'()*+,-./0125689FGHIJKLOPQRSTUVWXYZ[" RCF_PLUS_H RCF_PLUS_J
-#define USR_FORMER  "�����������)+,-./1234568;<=>?@ABCFGHIJKLMNOPQRSTUVWXYZ[" RCF_PLUS_H RCF_PLUS_J
+#define JOB_FORMER  "�����(��Ļ�@<��)*+,-./012568>?ABCFGHIJKLMNOPQRSTUVWXYZ[" RCF_PLUS_H RCF_PLUS_J
+#define MEM_FORMER  "���<�����MBN�D34��&'()*+,-./0125689FGHIJKLOPQRSTUVWXYZ[" RCF_PLUS_H RCF_PLUS_J
+#define USR_FORMER  "�����������)+,-./1234568;<=>?@ABCFGHIJKLMNOPQRSTUVWXYZ[" RCF_PLUS_H RCF_PLUS_J
         // old top fields ( 'a'-'z' ) in positions 0-25
         // other suse old top fields ( '{|' ) in positions 26-27
 #define CVT_FORMER  "%&*'(-0346789:;<=>?@ACDEFGML)+,./125BHIJKNOPQRSTUVWXYZ[" RCF_PLUS_H RCF_PLUS_J

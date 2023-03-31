@@ -83,7 +83,25 @@ struct stat_jifs {
     unsigned long long xusr, xsys, xidl, xbsy, xtot;
 };
 
+/*
+int id：表示该 core 的 ID。
+int type：表示该 core 的类型。取值为 0、1 或 2，分别表示 unsure、e-core 和 p-core。
+int thread_1：表示该 core 的第一个线程 ID。
+int thread_2：表示该 core 的第二个线程 ID。如果该 core 只有一个线程，那么 thread_2 的值应该为 -1。
+struct stat_core *next：表示指向下一个 struct stat_core 结构体的指针。在链表中使用。
+这个结构体用于表示系统中的处理器核心的统计信息。
+id 字段用于唯一标识核心，type 字段用于表示核心的类型，
+thread_1 和 thread_2 字段用于表示核心所属的线程。
+next 字段则用于将多个核心的信息连接成链表，以便在需要时能够轻松地遍历所有核心的信息。
+*/
 struct stat_core {
+    // 一个 CPU 封装中包含两种不同的内核：E-Cores 和 P-Cores。 inter cpu
+    // P-Core 通常会处理较重的任务，例如游戏或更重的处理负载，以及通常受益于单核性能的其他工作负载。
+    // 过去，当英特尔芯片上的内核全部相同时，PC 的所有指令均等分配在所有内核之间。
+    // 此外，P-Core 还提供超线程，这意味着每个内核将有两个处理线程来更好地处理负载。
+// -----------------------------------------------------------------------
+    // 与 P-Core 配置相结合，它可以处理多核工作负载和其他类型的后台任务，
+    // 同时也让 P-Core 大部分未被占用以处理较重的工作负载。
     int id;
     int type;                          // 2 = p-core, 1 = e-core, 0 = unsure
     int thread_1;
@@ -150,6 +168,29 @@ struct reap_support {
     struct stat_reap result;           // summary + stacks returned to caller
 };
 
+// 存储系统各项资源使用情况
+/*
+struct stat_info {
+    int refcount;                      // 引用计数，用于管理结构体的生命周期
+    FILE *stat_fp;                     // 指向 /proc/stat 文件的文件指针
+    char *stat_buf;                    // 用于保存 /proc/stat 文件内容的缓冲区
+    int stat_buf_size;                 // 缓冲区大小
+    int cpu_count_hwm;                 // CPU 核心数量
+    struct hist_sys sys_hist;          // SYS 类型管理
+    struct hist_tic cpu_hist;          // TIC 类型管理（用于 CPU 总体统计）
+    struct reap_support cpus;          // 实际 CPU 核心数
+    struct reap_support nodes;         // NUMA 节点数
+    struct ext_support cpu_summary;    // 用于支持 /proc/stat 的第一行结果
+    struct ext_support select;         // 用于支持 'procps_stat_select()'
+    struct stat_reaped results;        // 用于存储统计结果并返回给调用者
+    struct stat_result get_this;       // 用于存储统计结果并返回给调用者
+    struct item_support reap_items;    // 用于 reap 的项目（在 3 个结构体之间共享）
+    struct item_support select_items;  // 用于 select 的项目（独立于其他结构体）
+    time_t sav_secs;                   // 用于 procps_stat_get() 限制 IO 的时间戳
+    struct stat_core *cores;           // CPU 核心信息的链表
+};
+
+*/
 struct stat_info {
     int refcount;
     FILE *stat_fp;
@@ -511,22 +552,28 @@ static void stat_cores_link (
 static int stat_cores_verify (
         struct stat_info *info)
 {
+    // 1024
     char buf[CORE_BUFSIZ];
     int a_cpu, a_core;
     FILE *fp;
 
     // be tolerant of a missing CORE_FILE ...
+    // /proc/cpuinfo 
     if (!(fp = fopen(CORE_FILE, "r")))
         return 1;
     for (;;) {
+        // fgets相当于next，可以在循环中把每一行的str重复刷新到buf中
         if (NULL == fgets(buf, sizeof(buf), fp))
             break;
         if (buf[0] != 'p') continue;
+        // strstr 该函数返回在 haystack 中第一次出现 needle 字符串的位置，如果未找到则返回 null。
         if (!strstr(buf, "processor"))
             continue;
+        // 获取cpu核心数量
         sscanf(buf, "processor : %d", &a_cpu);
         for (;;) {
             // be tolerant of missing empty line on last processor entry ...
+            // fgets读取一行, 没有就返回null
             if (NULL == fgets(buf, sizeof(buf), fp))
                 goto wrap_up;
             // be tolerant of a missing 'core id' on any processor entry ...
@@ -722,7 +769,9 @@ static int stat_read_failed (
     if (!info->stat_fp
     && (!(info->stat_fp = fopen(STAT_FILE, "r"))))
         return 1;
+    // 刷盘操作
     fflush(info->stat_fp);
+    // rewind() 函数用于将文件的位置指针移动到文件的起始位置
     rewind(info->stat_fp);
 
  #define maxSIZ    info->stat_buf_size
@@ -1095,6 +1144,7 @@ PROCPS_EXPORT int procps_stat_new (
     // the select guy has its own set of items
     p->select.items = &p->select_items;
 
+    // 动态加载libnuma.so文件读取numa信息
     numa_init();
 
     // identify the current P-cores and E-cores, if any
@@ -1108,6 +1158,7 @@ PROCPS_EXPORT int procps_stat_new (
          2) make delta results potentially useful, even if 1st time |
          3) elimnate need for history distortions 1st time 'switch' | */
     if (stat_read_failed(p)) {
+        // 记录完信息之后把这个保存到/proc/stat文件中
         procps_stat_unref(&p);
         return -errno;
     }

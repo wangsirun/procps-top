@@ -92,6 +92,12 @@ static float       Cpu_pmax;
 static const char *Cpu_States_fmts;
 
         /* Specific process id monitoring support */
+// Monpids是procps中top命令的一个变量，它是一个指向整数数组的指针，
+// 用于存储被监视的进程ID。在top命令中，用户可以使用'-p'选项指定一个或多个进程ID，
+// 这些进程将被监视并显示在top输出中。Monpids变量用于存储被监视进程的ID，
+// 每个进程ID都存储在数组的一个元素中。默认情况下，它的值为NULL，表示没有进程被监视。
+// 如果用户指定了要监视的进程，则会动态分配一个整数数组来存储进程ID，并将Monpids设置为指向该数组的指针。
+// 通过操作Monpids变量，top命令可以在多个被监视进程中进行切换，并允许用户查看每个进程的状态信息。 
 static int Monpids [MONPIDMAX+1] = { 0 };
 static int Monpidsidx = 0;
 
@@ -140,6 +146,11 @@ static void(*Bot_show_func)(void);
         /* This is really the number of lines needed to display the summary
            information (0 - nn), but is used as the relative row where we
            stick the cursor between frames. */
+/*
+   在procps中，top命令是一种监视系统进程的实用工具。Msg_row是一个变量，它在top命令中用于跟踪在终端窗口的哪一行显示消息。
+   当top命令运行时，它会在终端窗口的顶部显示系统的摘要信息，然后在下面显示每个运行进程的详细信息。Msg_row变量会跟踪最近一次在终端窗口显示的消息所在的行数。如果top命令需要在屏幕上显示一条新的消息，它会将消息打印在Msg_row变量所指定的行数上，然后将Msg_row变量增加1，以便下一条消息将显示在下一行。
+   因此，Msg_row变量可以帮助top命令在屏幕上显示多个消息，而不必覆盖之前显示的消息。
+*/
 static int Msg_row;
 
         /* Global/Non-windows mode stuff that is NOT persistent */
@@ -2802,16 +2813,29 @@ static void *tasks_refresh (void *unused) {
 #ifdef THREADED_TSK
       sem_wait(&Semaphore_tasks_beg);
 #endif
+      // 获取系统总运行时间 
       procps_uptime(&uptime_cur, NULL);
       et = uptime_cur - uptime_sav;
       if (et < 0.01) et = 0.005;
       uptime_sav = uptime_cur;
       // if in Solaris mode, adjust our scaling for all cpus
+      // 这个变量将用于控制显示的时间单位
+      // 100 / (100hz * interval * 1)
       Frame_etscale = 100.0f / ((float)Hertz * (float)et * (Rc.mode_irixps ? 1 : Cpu_cnt));
 
+      // 先看不设置thread_mode的
+      // what = PIDS_FETCH_TASKS_ONLY = 0
       what = Thread_mode ? PIDS_FETCH_THREADS_TOO : PIDS_FETCH_TASKS_ONLY;
+      // Monpidsidx是procps中top命令的一个变量，表示当前正在监视的进程的索引。
+      // 在top命令中，用户可以使用'-p'选项指定一个或多个进程ID，
+      // 这些进程将被监视并显示在top输出中。Monpidsidx变量用于记录当前监视的进程的索引。
+      // 默认情况下，它的值为-1，表示没有进程被监视。如果用户指定了要监视的进程，
+      // 则Monpidsidx将被设置为第一个被监视进程的索引，之后可以使用't'命令在监视进程列表中移动。
+      // 通过设置Monpidsidx变量，top命令可以在多个被监视进程中进行切换，并允许用户查看每个进程的状态信息。
       if (Monpidsidx) {
          what |= PIDS_SELECT_PID;
+         // 在这里会初始化proctab
+         // 全局变量,表示当前抓取的进程的信息汇总 Pids_ctx全局变量，表示全部进程的所有信息
          Pids_reap = procps_pids_select(Pids_ctx, (unsigned *)Monpids, Monpidsidx, what);
       } else
          Pids_reap = procps_pids_reap(Pids_ctx, what);
@@ -3631,21 +3655,27 @@ static inline int osel_matched (const WIN_t *q, FLG_t enu, const char *str) {
          * No matter what *they* say, we handle the really really BIG and
          * IMPORTANT stuff upon which all those lessor functions depend! */
 static void before (char *me) {
+   // 非一致性内存访问节点 捕获numa节点的状态
  #define doALL STAT_REAP_NUMA_NODES_TOO
    int i, rc;
+   // 读取linux内核的版本
    int linux_version_code = procps_linux_version();
 
+   // 注册退出函数
    atexit(close_stdout);
 
    // setup our program name
+   //获取启动命令 eg ./test 那就获取test这个命令
    Myname = strrchr(me, '/');
    if (Myname) ++Myname; else Myname = me;
 
    // accommodate nls/gettext potential translations
    // ( must 'setlocale' before our libproc called )
+   // 支持多语言的lib,目前不用关心这里的实现
    initialize_nls();
 
    // is /proc mounted?
+   // 检查是否挂载了proc
    fatal_proc_unmounted(NULL, 0);
 
 #ifndef OFF_STDERROR
@@ -3659,13 +3689,16 @@ static void before (char *me) {
       ;                           // avoid -Wunused-result
 #endif
 
-   // establish some cpu particulars
+   // establish some cpu particulars细节
+   // 获取时钟HZ, 一般是100hz
    Hertz = procps_hertz_get();
+   // 获取cpuinfo的文件格式信息
    Cpu_States_fmts = N_unq(STATE_lin2x6_fmt);
    if (linux_version_code >= LINUX_VERSION(2, 6, 11))
       Cpu_States_fmts = N_unq(STATE_lin2x7_fmt);
 
    // get the total cpus (and, if possible, numa node total)
+   // stat_ctx: 存储系统各项资源使用情况
    if ((rc = procps_stat_new(&Stat_ctx)))
       Restrict_some = Cpu_cnt = 1;
    else {
@@ -3685,10 +3718,12 @@ static void before (char *me) {
       Restrict_some = 1;
 
    // establish max depth for newlib pids stack (# of result structs)
+   // 建立每一个字段的宽度
    Pids_itms = alloc_c(sizeof(enum pids_item) * MAXTBL(Fieldstab));
    if (PIDS_noop != 0)
       for (i = 0; i < MAXTBL(Fieldstab); i++)
          Pids_itms[i] = PIDS_noop;
+   // 多少项内容
    Pids_itms_tot = MAXTBL(Fieldstab);
    // we will identify specific items in the build_headers() function
    if ((rc = procps_pids_new(&Pids_ctx, Pids_itms, Pids_itms_tot)))
@@ -3700,6 +3735,20 @@ static void before (char *me) {
    /* in case any of our threads have been enabled, they'll inherit this mask
       with everything blocked. therefore, signals go to the main thread (us). */
    sigfillset(&sa.sa_mask);
+   // 用于设置线程的信号屏蔽字的函数
+   /* int pthread_sigmask(int how, const sigset_t *newmask, sigset_t *oldmask)
+   参数说明：
+      how：表示如何修改信号屏蔽字，其取值可以是以下几种：
+         SIG_BLOCK：将newmask中的信号添加到当前线程的信号屏蔽字中；
+         SIG_UNBLOCK：将newmask中的信号从当前线程的信号屏蔽字中去除；
+         SIG_SETMASK：将当前线程的信号屏蔽字设置为newmask中的信号集合。
+      newmask：指向sigset_t类型的指针，该结构体中包含了要修改的信号集合。
+      oldmask：指向sigset_t类型的指针，用于保存旧的信号屏蔽字。
+      返回值：
+
+      成功时，返回0；
+      失败时，返回错误编号。
+   */
    pthread_sigmask(SIG_BLOCK, &sa.sa_mask, NULL);
 }
 #endif
@@ -4396,10 +4445,17 @@ static void parse_args (int argc, char **argv) {
         /*
          * Establish a robust signals environment */
 static void signals_set (void) {
+   // 最大信号量
  #ifndef SIGRTMAX       // not available on hurd, maybe others too
   #define SIGRTMAX 32
  #endif
    int i;
+   /*
+   sa_handler：信号处理函数的指针，即对应信号发生时要执行的操作。
+   sa_sigaction：另一种信号处理函数的指针，与sa_handler二选一，用于处理复杂信号，例如带有附加信息的信号。
+   sa_mask：一个信号集，指定在信号处理程序运行期间要阻塞的信号。当处理程序正在运行时，由此信号集中的任何信号都将被屏蔽，以防止其他信号干扰。
+   sa_flags：标志位，用于指定新的行为或修改现有行为。其中最常用的标志是SA_RESTART，它会自动重启被信号中断的系统调用。
+   */
    struct sigaction sa;
 
    memset(&sa, 0, sizeof(sa));
@@ -4410,6 +4466,12 @@ static void signals_set (void) {
       switch (i) {
          case SIGHUP:
             if (Batch)
+               /*
+               SIG_IGN是一个信号处理函数，用于忽略某些特定的信号。
+               当进程收到被SIG_IGN处理函数标记的信号时，该信号将被自动忽略，
+               不会触发任何操作或处理程序。在Unix/Linux系统中，
+               一些常见的信号可以通过SIG_IGN来忽略，如SIGINT（Ctrl+C）和SIGHUP（挂起）。
+               */
                sa.sa_handler = SIG_IGN;
             else
                sa.sa_handler = sig_endpgm;
@@ -6752,6 +6814,7 @@ static void summary_show (void) {
       if (isROOM(View_STATES, 1)) {
          show_special(0, fmtmk(N_unq(STATE_line_1_fmt)
             , Thread_mode ? N_txt(WORD_threads_txt) : N_txt(WORD_process_txt)
+            // 总数 睡眠 停止 僵死
             , PIDSmaxt, Pids_reap->counts->running
             , Pids_reap->counts->sleeping + Pids_reap->counts->other
             , Pids_reap->counts->stopped, Pids_reap->counts->zombied));
@@ -7299,6 +7362,7 @@ static void frame_make (void) {
       putp(Batch ? "\n\n" : Cap_home);
 
    Tree_idx = Pseudo_row = Msg_row = scrlins = 0;
+   // show
    summary_show();
    Max_lines = (SCREEN_ROWS - Msg_row) - 1;
 
@@ -7351,7 +7415,9 @@ int main (int argc, char *argv[]) {
                                         //                 +-------------+
    wins_stage_1();                      //                 top (sic) slice
    configs_reads();                     //                 > spread etc, <
+   // 解析输入的参数
    parse_args(argc, argv);              //                 > onions etc, <
+   // 设置一些信号处理
    signals_set();                       //                 > lean stuff, <
    whack_terminal();                    //                 > more stuff. <
    wins_stage_2();                      //                 as bottom slice

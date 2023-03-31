@@ -69,6 +69,7 @@ void numa_init (void) {
 #ifndef NUMA_DISABLE
  #ifndef PRETEND_NUMA
     // we'll try for the most recent version, then a version we know works...
+    // 动态加载动态共享库的函数
     if ((libnuma_handle = dlopen("libnuma.so", RTLD_LAZY))
     || (libnuma_handle = dlopen("libnuma.so.1", RTLD_LAZY))) {
         numa_max_node = dlsym(libnuma_handle, "numa_max_node");

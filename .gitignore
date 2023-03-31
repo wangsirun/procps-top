@@ -1,5 +1,7 @@
 *.lo
 *.o
+.vscode
+test*
 *.so
 *.swp
 *.trs

@@ -66,6 +66,15 @@ struct stacks_extent {
     struct pids_stack **stacks;
 };
 
+/*
+    struct pids_stack **anchor: 一个指向pids_stack指针的指针，用于存储可用的pids_stack的内存块，并在需要时对其进行合并。这个字段的作用是在进程堆栈信息采集过程中，对堆栈信息进行合并和排序，以便于后续处理。
+    int n_alloc: 已经分配的pids_stack指针的数量。
+    int n_inuse: 已经使用的pids_stack指针的数量。
+    int n_alloc_save: 上一次为results.stacks分配的pids_stack指针数量，用于跟踪堆栈信息的增长和缩小。
+    struct pids_fetch results: 存储采集到的进程堆栈信息的结构体，包括进程数、线程数和所有线程的堆栈信息。
+    struct pids_counts counts: 存储采集到的进程数和线程数的结构体。
+    总之，fetch_support结构体是用于支持进程堆栈信息采集的结构体，包括pids_stack的分配和合并、采集结果的存储和跟踪采集进程数和线程数等信息。
+*/
 struct fetch_support {
     struct pids_stack **anchor;        // reap/select consolidated extents
     int n_alloc;                       // number of above pointers allocated
@@ -76,6 +85,7 @@ struct fetch_support {
 };
 
 struct pids_info {
+    // 控制该结构体的生命周期
     int refcount;
     int maxitems;                      // includes 'logical_end' delimiter
     int curitems;                      // includes 'logical_end' delimiter
@@ -1035,6 +1045,7 @@ static inline int pids_oldproc_open (
         ids = va_arg(vl, int*);
         if (flags & PROC_UID) num = va_arg(vl, int);
         va_end(vl);
+        // 初始化proctab
         if (NULL == (*this = openproc(flags, ids, num)))
             return 0;
     }
@@ -1134,6 +1145,14 @@ static struct stacks_extent *pids_stacks_alloc (
 } // end: pids_stacks_alloc
 
 
+// 要在/proc/pid/目录下采集该进程下的线程的栈大小和栈帧信息，可以使用以下步骤：
+// 进入/proc/pid/目录，其中pid是要查看的进程的进程ID。
+// 在该目录下，有一个名为task的子目录，其中包含了进程下的所有线程的信息。进入该目录：cd /proc/pid/task/
+// 在该目录下，每个子目录的名称都是一个线程的ID，可以遍历所有子目录，获取每个线程的ID。
+// 对于每个线程，可以读取该线程的stack_size文件以获取栈大小。例如：cat /proc/pid/task/thread_id/stack_size
+// 如果需要获取更详细的栈帧信息，可以读取该线程的stack文件。例如：cat /proc/pid/task/thread_id/stack
+// 需要注意的是，获取栈帧信息需要对该信息进行解析，因为stack文件中包含了该线程在函数调用栈中的所有函数和函数参数等信息。这些信息可能需要一定的编程技巧才能进行解析。
+// 获取该进程下的所有的线程的堆栈信息
 static int pids_stacks_fetch (
         struct pids_info *info)
 {
@@ -1292,6 +1311,7 @@ PROCPS_EXPORT int procps_pids_new (
     p->hist->HHist_siz = NEWOLD_INIT;
     pids_config_history(p);
 
+    // 虚拟内存大小 #include <unistd.h>
     pgsz = getpagesize();
     while (pgsz > 1024) { pgsz >>= 1; p->pgs2k_shift++; }
     p->hertz = procps_hertz_get();
@@ -1374,6 +1394,7 @@ PROCPS_EXPORT int procps_pids_unref (
 
 // --- variable interface functions -------------------------------------------
 
+// info null return_self 0
 PROCPS_EXPORT struct pids_stack *fatal_proc_unmounted (
         struct pids_info *info,
         int return_self)
@@ -1447,6 +1468,7 @@ fresh_start:
  *
  * Returns: pointer to a pids_fetch struct on success, NULL on error.
  */
+// 抓取所有的进程信息
 PROCPS_EXPORT struct pids_fetch *procps_pids_reap (
         struct pids_info *info,
         enum pids_fetch_type which)
@@ -1542,19 +1564,26 @@ PROCPS_EXPORT int procps_pids_reset (
  *
  * Returns: pointer to a pids_fetch struct on success, NULL on error.
  */
+// if (!(fetched = procps_pids_select(info, &tid, 1, PIDS_SELECT_PID)))
 PROCPS_EXPORT struct pids_fetch *procps_pids_select (
+        // null
         struct pids_info *info,
+        // tid 要监控的所有的进程id，是一个数组
         unsigned *these,
+        // 要监控的进程id的数量
         int numthese,
+        // first
         enum pids_select_type which)
 {
+    // 最大允许监控的进程id数量不超过255
     unsigned ids[FILL_ID_MAX + 1];
     double up_secs;
     int rc;
-
+    // invalid argument
     errno = EINVAL;
     if (info == NULL || these == NULL)
         return NULL;
+    // 大于255或者小于1就返回
     if (numthese < 1 || numthese > FILL_ID_MAX)
         return NULL;
     if ((which != PIDS_SELECT_PID && which != PIDS_SELECT_UID)
@@ -1567,9 +1596,12 @@ PROCPS_EXPORT struct pids_fetch *procps_pids_select (
     errno = 0;
 
     // this zero delimiter is really only needed with PIDS_SELECT_PID
+    // 初始化
     memcpy(ids, these, sizeof(unsigned) * numthese);
+    // 最后一个置为0
     ids[numthese] = 0;
 
+    // 这里的第二个参数就是pt的flags
     if (!pids_oldproc_open(&info->fetch_PT, (info->oldflags | which), ids, numthese))
         return NULL;
     info->read_something = (which & PIDS_FETCH_THREADS_TOO) ? readeither : readproc;
@@ -1582,6 +1614,7 @@ PROCPS_EXPORT struct pids_fetch *procps_pids_select (
 
     rc = pids_stacks_fetch(info);
 
+    // 关闭两个dirent pdirent tdirent
     pids_oldproc_close(&info->fetch_PT);
     // no guarantee any pids/uids were found
     return (rc >= 0) ? &info->fetch.results : NULL;
